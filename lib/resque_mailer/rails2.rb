@@ -59,9 +59,27 @@ module Resque
 
       #
       # This method is called by the given mailer after it receives a deliver that
-      # was sent through the above (objects_to_ids)
+      # was sent through the above (objects_to_model_hashes)
       #
       def objects_from_model_hashes(*args)
+        tmp = *args.dup
+        tmp = [ tmp ] unless tmp.is_a? Array
+
+        tmp.each_with_index do |arg, index|
+          next unless arg.is_a? Hash
+
+          new_arg = {}
+          arg.each do |k, v|
+            next unless v.is_a?(Hash) and v.keys.include?("model") and v.keys.include?("id")
+            klass = Object.const_get(v["model"])
+            next unless klass
+            o = klass.send :find, v["id"]
+            next unless o
+            args[index] = { k => o }
+          end
+        end
+
+        args.present? && args.size == 1 ? args.first : args
       end
 
       def logger

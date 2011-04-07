@@ -58,14 +58,23 @@ describe Rails2Mailer do
         mail_params
       end
 
-      it "should send model hashes" do
-        #expected = Rails2Mailer::MAIL_PARAMS
+      it "should send objects with model hashes" do
         expected = {:user=>{:model=>"User", :id=>1971}}
 
         @delivery = lambda { Rails2Mailer.deliver_test_mail(mail_params) }
         Resque.should_receive(:enqueue).with(Rails2Mailer, "deliver_test_mail!", expected)
 
         @delivery.call
+      end
+
+      it "should receive objects with model hashes" do
+        # Hash will come from resque as json so all keys will be strings
+        args = { "user" => {"model" => "User", "id" => 1971} }
+        expected = { "user" => user }
+
+        User.stub(:find).and_return(user)
+
+        Rails2Mailer.send(:objects_from_model_hashes, args).should == expected
       end
     end
 
