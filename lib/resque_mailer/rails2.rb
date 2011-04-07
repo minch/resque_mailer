@@ -67,46 +67,6 @@ module Resque
       def logger
         RAILS_DEFAULT_LOGGER rescue nil
       end
-
-      #def objects_to_ids(*args)
-        #new_args = []
-
-        #args.each do |arg|
-          #unless arg.is_a? Hash
-            #new_args.push arg
-            #next
-          #else
-            #new_arg = {}
-
-            #arg.each do |k, v|
-              #if v.respond_to?(:id) and ( v.id != v.object_id)
-                ## Assume this is some type of orm backed model
-                ## Note:  don't assume that the key is the correct name
-                #klass_name = v.class.name.tableize.singluarize rescue nil
-                #unless klass_name
-                  #warning = "Couldn't get klass_name for #{k.inspect} => #{v.inspect}"
-                  #if logger
-                    #logger.warn warning
-                  #else
-                    #puts warning
-                  #end
-
-                  #next
-                #end
-
-                #key = "#{klass_name}_id".to_sym
-                #new_arg[key] = v.id
-              #else
-                #new_arg[k] = v
-              #end
-            #end
-
-            #new_args.push new_arg
-          #end
-        #end
-
-        #new_args
-      #end
     end
   end
 end
