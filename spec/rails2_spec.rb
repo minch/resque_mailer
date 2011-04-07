@@ -3,6 +3,7 @@ require File.join(File.expand_path(File.dirname(__FILE__)), 'spec_helper')
 gem     'actionmailer', '~>2.3.4'
 require 'action_mailer'
 require 'resque_mailer/rails2'
+#require 'active_record'
 
 ActionMailer::Base.delivery_method = :test
 
@@ -18,6 +19,10 @@ class Rails2Mailer < ActionMailer::Base
     @sent_on    = Time.now
     @headers    = {}
   end
+end
+
+class User # < ActiveRecord::Base
+  attr_accessor :id
 end
 
 describe Rails2Mailer do
@@ -43,6 +48,25 @@ describe Rails2Mailer do
     it 'should place the deliver action on the Resque "mailer" queue' do
       Resque.should_receive(:enqueue).with(Rails2Mailer, "deliver_test_mail!", Rails2Mailer::MAIL_PARAMS)
       @delivery.call
+    end
+
+    context "when *args contains models" do
+      let(:user) { user = User.new ; user.id = 1971 ; user }
+      let(:mail_params) do
+        mail_params = Rails2Mailer::MAIL_PARAMS
+        mail_params.store(:user, user)
+        mail_params
+      end
+
+      it "should send model hashes" do
+        #expected = Rails2Mailer::MAIL_PARAMS
+        expected = {:user=>{:model=>"User", :id=>1971}}
+
+        @delivery = lambda { Rails2Mailer.deliver_test_mail(mail_params) }
+        Resque.should_receive(:enqueue).with(Rails2Mailer, "deliver_test_mail!", expected)
+
+        @delivery.call
+      end
     end
 
     context "when current env is excluded" do
