@@ -21,7 +21,11 @@ class Rails2Mailer < ActionMailer::Base
   end
 end
 
-class User # < ActiveRecord::Base
+class User
+  attr_accessor :id
+end
+
+class Deal
   attr_accessor :id
 end
 
@@ -58,23 +62,84 @@ describe Rails2Mailer do
         mail_params
       end
 
-      it "should send objects with model hashes" do
-        expected = {:user=>{:model=>"User", :id=>1971}}
+      context "sending through resque mailer" do
+        it "should send objects with model hashes" do
+          expected = Rails2Mailer::MAIL_PARAMS.dup.merge({:user=>{:model=>"User", :id=>1971}})
 
-        @delivery = lambda { Rails2Mailer.deliver_test_mail(mail_params) }
-        Resque.should_receive(:enqueue).with(Rails2Mailer, "deliver_test_mail!", expected)
+          @delivery = lambda { Rails2Mailer.deliver_test_mail(mail_params) }
+          Resque.should_receive(:enqueue).with(Rails2Mailer, "deliver_test_mail!", expected)
 
-        @delivery.call
+          @delivery.call
+        end
+
+        it "should send hashes that do not contain models" do
+          recipient = 'foo@bar.com'
+          mp = mail_params.dup
+          mp.delete(:user)
+          mp.store(:recipient, recipient)
+          expected = Rails2Mailer::MAIL_PARAMS.dup
+          expected = expected.merge(:recipient => recipient)
+          expected.delete(:user)
+
+          @delivery = lambda { Rails2Mailer.deliver_test_mail(mp) }
+          Resque.should_receive(:enqueue).with(Rails2Mailer, "deliver_test_mail!", expected)
+
+          @delivery.call
+        end
       end
 
-      it "should receive objects with model hashes" do
-        # Hash will come from resque as json so all keys will be strings
-        args = { "user" => {"model" => "User", "id" => 1971} }
-        expected = { "user" => user }
+      context "receiving from resque mailer" do
+        it "should receive objects with model hashes" do
+          # Hash will come from resque as json so all keys will be strings
+          args = { "user" => {"model" => "User", "id" => 1971} }
+          expected = { "user" => user }
 
-        User.stub(:find).and_return(user)
+          User.stub(:find).and_return(user)
 
-        Rails2Mailer.send(:objects_from_model_hashes, args).should == expected
+          Rails2Mailer.send(:objects_from_model_hashes, args).should == expected
+        end
+
+        it "should receive objects with hashes that do not contain models" do
+          # Hash will come from resque as json so all keys will be strings
+          args = { "recipient" => "foo@bar.com" }
+          expected = { "recipient" => "foo@bar.com" }
+
+          User.stub(:find).and_return(user)
+
+          actual = Rails2Mailer.send(:objects_from_model_hashes, args)
+          actual.should == expected
+        end
+
+        it "should receive hashes that contain models and objects" do
+          # Hash will come from resque as json so all keys will be strings
+          recipient = 'foo@bar.com'
+          args = { "user" => {"model" => "User", "id" => 1971}, "recipient" => recipient }
+          expected = { "user" => user, "recipient" => recipient }
+
+          User.stub(:find).and_return(user)
+
+          actual = Rails2Mailer.send(:objects_from_model_hashes, args)
+          actual.should == expected
+        end
+
+        it "should receive hashes that contain multiple models and objects" do
+          # Hash will come from resque as json so all keys will be strings
+          recipient = 'foo@bar.com'
+          deal = Deal.new
+          deal.id = 1969
+          args = {
+            "user" => {"model" => "User", "id" => 1971},
+            "deal" => {"model" => "Deal", "id" => 1969},
+            "recipient" => recipient
+          }
+          expected = { "deal" => deal, "user" => user, "recipient" => recipient }
+
+          User.stub(:find).and_return(user)
+          Deal.stub(:find).and_return(deal)
+
+          actual = Rails2Mailer.send(:objects_from_model_hashes, args)
+          actual.should == expected
+        end
       end
     end
 

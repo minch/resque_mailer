@@ -41,19 +41,30 @@ module Resque
       def objects_to_model_hashes(*args)
         tmp = *args.dup
         tmp = [ tmp ] unless tmp.is_a? Array
+        results = []
 
         tmp.each_with_index do |arg, index|
-          next unless arg.is_a? Hash
+          result = nil
+
+          unless arg.is_a? Hash
+            results.push(arg)
+            next
+          end
 
           new_arg = {}
           arg.each do |k, v|
-            if v.respond_to?(:id) and ( v.id != v.object_id)
-              args[index] = { k => { :id => v.id, :model => v.class.name } }
+            id = v.id rescue nil
+            if id != v.object_id
+              new_arg[k] = { :id => v.id, :model => v.class.name }
+            else
+              new_arg[k] = v
             end
           end
+
+          results.push(new_arg)
         end
 
-        args.present? && args.size == 1 ? args.first : args
+        results.present? && results.size == 1 ? results.first : results
       end
 
       #
@@ -72,26 +83,41 @@ module Resque
       def objects_from_model_hashes(*args)
         tmp = *args.dup
         tmp = [ tmp ] unless tmp.is_a? Array
+        results = []
 
         tmp.each_with_index do |arg, index|
-          next unless arg.is_a? Hash
+          result = nil
+
+          unless arg.is_a? Hash
+            results.push(arg)
+            next
+          end
 
           new_arg = {}
           arg.each do |k, v|
-            next unless v.is_a?(Hash)
+            unless v.is_a?(Hash)
+              new_arg[k] = v
+              next
+            end
+
             # Keys come from redis as strings but need to normalize for any synchronous deliveries
             v = v.stringify_keys
-            next unless v.keys.include?("model") and v.keys.include?("id")
+            unless v.keys.include?("model") and v.keys.include?("id")
+              next
+            end
 
             klass = Object.const_get(v["model"])
             next unless klass
             o = klass.send :find, v["id"]
             next unless o
-            args[index] = { k => o }
+
+            new_arg[k] = o
           end
+
+          results.push(new_arg)
         end
 
-        args.present? && args.size == 1 ? args.first : args
+        results.present? && results.size == 1 ? results.first : results
       end
 
       def logger
